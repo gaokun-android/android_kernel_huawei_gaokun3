@@ -244,3 +244,4 @@ obj-$(CONFIG_LWTUNNEL) += nf_hooks_lwtunnel.o
 ifdef CONFIG_GCOV_PROFILE_NETFILTER
 GCOV_PROFILE := y
 endif
+obj-$(CONFIG_NETFILTER_XT_MATCH_QUOTA2) += xt_quota2.o

@@ -22,7 +22,7 @@
 	leds {
 		compatible = "gpio-leds";
 
-		pinctrl-0 = <&cam_indicator_en>, <&camera_flash_en>;
+		pinctrl-0 = <&cam_indicator_en>;
 		pinctrl-names = "default";
 
 		privacy_led: privacy-led {
@@ -33,13 +33,10 @@
 			panic-indicator;
 		};
 
-		camera_flash: led {
-			function = LED_FUNCTION_FLASH;
-			color = <LED_COLOR_ID_WHITE>;
-			gpios = <&tlmm 93 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "none";
-			default-state = "off";
-		};
+		/*
+		 * GPIO93 曾在这里被当成 flash LED（white:flash）——实测打脉冲不亮（#106），
+		 * 连带的 camera_flash_en pinctrl 状态一起删了。真闪光灯是下面 &pmc8280c 的 led-0。
+		 */
 	};
 
 	vreg_camf_1p2: regulator-camf-1p2 {
@@ -60,6 +57,10 @@
 		compatible = "regulator-fixed";
 
 		regulator-name = "vreg_camr";
+		/* Rear sensor digital core rail, gated by GPIO92 (Windows CAMS_RES_QRD).
+		 * The board LDO sets the real voltage; 1.2V is OV13B10 DVDD nominal. */
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
 
 		gpio = <&tlmm 92 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
@@ -108,6 +109,29 @@
 	};
 };
 
+/*
+ * 闪光灯（patches/0036）：Windows 的 \_SB.FLSH 设备没有 GPIO/I2C 资源 ⇒ 走 PMIC 闪光模块
+ * （pmc8280c = PM8350C，主线 leds-qcom-flash）；GPIO93 直驱实测不亮（#106）。
+ * 2026-09-14 内核 #19 四路逐个 torch 实测（用户看背面）：LED 接在 **1 + 4 路**（#110）。
+ * ⚠️ 电流上限是【保守假设】不是模组手册值：torch 合计 200 mA、flash 600 mA / 400 ms。
+ * ⚠️ 故意不在 ov13b10 节点上写 flash-leds：那会让 v4l2-async 再多等一个 subdev。
+ */
+&pmc8280c {
+	pmc8280c_flash: led-controller@ee00 {
+		compatible = "qcom,pm8350c-flash-led", "qcom,spmi-flash-led";
+		reg = <0xee00>;
+
+		camera_flash_led: led-0 {
+			function = LED_FUNCTION_FLASH;
+			color = <LED_COLOR_ID_WHITE>;
+			led-sources = <1>, <4>;
+			led-max-microamp = <200000>;
+			flash-max-microamp = <600000>;
+			flash-max-timeout-us = <400000>;
+		};
+	};
+};
+
 &camss {
 	/*
 	 * CSIPHY0, CSIPHY1 1.2v = l4d, 0.88v = l6d
@@ -122,13 +146,21 @@
 	status = "okay";
 
 	ports {
+		/*
+		 * port@0: csiphy0 -> rear OV13B10. Restored 2026-09-14 with the
+		 * board's real power sequence (Windows CAMS_RES_QRD.bin, see
+		 * docs/stage4-findings.md #106): LDO2_B 2.8V (vdda), LDO2_C 1.8V
+		 * (vddio), GPIO92-gated rail (vddd), reset GPIO7, MCLK4 24MHz.
+		 * L2B is shared with the panel's vddi (1.8V vote); the sensor
+		 * driver raises it to 2.8V while powered, exactly like Windows.
+		 */
 		port@0 {
 			csiphy0_ep: endpoint@0 {
 				reg = <0>;
 
 				clock-lanes = <7>;
 				data-lanes = <0 1 2 3>;
-				remote-endpoint = <&s5k3l6_ep>;
+				remote-endpoint = <&ov13b10_ep>;
 			};
 		};
 
@@ -164,25 +196,32 @@
 	 *
 	 * This sensor has never been detected on 2023 model
 	 */
-	camera_rear: camera@10 {
-		compatible = "samsung,s5k3l6xx";
-		reg = <0x10>;
+	/*
+	 * Rear camera. The board's Windows driver package ships two rear modules
+	 * (ofilm_ov13b10 and lijing_s5k3l6); on this unit a bus scan with the
+	 * rails up (2026-09-14, docs/stage4-findings.md #106) answered at 0x36
+	 * (OV13B10) and 0x50 (module EEPROM), nothing at 0x10 - so it is the
+	 * OV13B10. Rails from CAMS_RES_QRD.bin: LDO2_B 2.8V (avdd, shared with
+	 * the panel's 1.8V vddi - the driver raises it while powered), LDO2_C
+	 * 1.8V (dovdd), GPIO92-gated core rail (dvdd), reset GPIO7, MCLK4.
+	 * The upstream ov13b10 register tables assume a 19.2 MHz MCLK.
+	 */
+	camera_rear: camera@36 {
+		compatible = "ovti,ov13b10";
+		reg = <0x36>;
 
 		pinctrl-0 = <&camr_rgb_default>;
 		pinctrl-names = "default";
 
 		clocks = <&camcc CAMCC_MCLK4_CLK>;
-		clock-names = "mclk";
-		clock-frequency = <24000000>;
+		assigned-clocks = <&camcc CAMCC_MCLK4_CLK>;
+		assigned-clock-rates = <19200000>;
 
-		rstn-gpios = <&tlmm 7 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&tlmm 7 GPIO_ACTIVE_LOW>;
 
-		vddio-supply = <&vreg_camr>;
-		vdda-supply = <&vreg_l2b>; // 2.8v
-		vddd-supply = <&vreg_l2c>; // 1.8v
-
-		leds = <&privacy_led>; // &camera_flash can't be enabled for now
-		led-names = "privacy";
+		avdd-supply = <&vreg_l2b>;
+		dovdd-supply = <&vreg_l2c>;
+		dvdd-supply = <&vreg_camr>;
 
 		lens-focus = <&voice_coil_motor>;
 
@@ -190,8 +229,9 @@
 		rotation = <180>; /* FIXME */
 
 		port {
-			s5k3l6_ep: endpoint {
+			ov13b10_ep: endpoint {
 				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <560000000>;
 				remote-endpoint = <&csiphy0_ep>;
 			};
 		};
@@ -252,12 +292,6 @@
 		bias-disable;
 	};
 
-	camera_flash_en: camera-flash-en-state {
-		pins = "gpio93";
-		function = "gpio";
-		drive-strength = <2>;
-		bias-disable;
-	};
 
 	camf_1p2_reg_en: camf-1p2-reg-en-state {
 		pins = "gpio44";

@@ -667,7 +667,7 @@ static struct clk_rcg2 camcc_camnoc_axi_clk_src = {
 		.name = "camcc_camnoc_axi_clk_src",
 		.parent_data = camcc_parent_data_2,
 		.num_parents = ARRAY_SIZE(camcc_parent_data_2),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_shared_ops,
 	},
 };
 
@@ -835,7 +835,7 @@ static struct clk_rcg2 camcc_fast_ahb_clk_src = {
 		.name = "camcc_fast_ahb_clk_src",
 		.parent_data = camcc_parent_data_0,
 		.num_parents = ARRAY_SIZE(camcc_parent_data_0),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_shared_ops,
 	},
 };
 
@@ -1370,7 +1370,7 @@ static struct clk_rcg2 camcc_slow_ahb_clk_src = {
 		.name = "camcc_slow_ahb_clk_src",
 		.parent_data = camcc_parent_data_0,
 		.num_parents = ARRAY_SIZE(camcc_parent_data_0),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_shared_ops,
 	},
 };
 
@@ -1745,24 +1745,6 @@ static struct clk_branch camcc_csiphy3_clk = {
 			.name = "camcc_csiphy3_clk",
 			.parent_hws = (const struct clk_hw*[]){
 				&camcc_cphy_rx_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch camcc_gdsc_clk = {
-	.halt_reg = 0xc1e4,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xc1e4,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data){
-			.name = "camcc_gdsc_clk",
-			.parent_hws = (const struct clk_hw*[]){
-				&camcc_xo_clk_src.clkr.hw,
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
@@ -2729,6 +2711,9 @@ static struct gdsc titan_top_gdsc;
 
 static struct gdsc bps_gdsc = {
 	.gdscr = 0x7004,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "bps_gdsc",
 	},
@@ -2739,6 +2724,9 @@ static struct gdsc bps_gdsc = {
 
 static struct gdsc ife_0_gdsc = {
 	.gdscr = 0xa004,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "ife_0_gdsc",
 	},
@@ -2749,6 +2737,9 @@ static struct gdsc ife_0_gdsc = {
 
 static struct gdsc ife_1_gdsc = {
 	.gdscr = 0xb004,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "ife_1_gdsc",
 	},
@@ -2759,6 +2750,9 @@ static struct gdsc ife_1_gdsc = {
 
 static struct gdsc ife_2_gdsc = {
 	.gdscr = 0xf004,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "ife_2_gdsc",
 	},
@@ -2769,6 +2763,9 @@ static struct gdsc ife_2_gdsc = {
 
 static struct gdsc ife_3_gdsc = {
 	.gdscr = 0xf070,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "ife_3_gdsc",
 	},
@@ -2779,6 +2776,9 @@ static struct gdsc ife_3_gdsc = {
 
 static struct gdsc ipe_0_gdsc = {
 	.gdscr = 0x8004,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "ipe_0_gdsc",
 	},
@@ -2789,6 +2789,9 @@ static struct gdsc ipe_0_gdsc = {
 
 static struct gdsc ipe_1_gdsc = {
 	.gdscr = 0x9004,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "ipe_1_gdsc",
 	},
@@ -2799,6 +2802,9 @@ static struct gdsc ipe_1_gdsc = {
 
 static struct gdsc titan_top_gdsc = {
 	.gdscr = 0xc1bc,
+	.en_rest_wait_val = 0x2,
+	.en_few_wait_val = 0x2,
+	.clk_dis_wait_val = 0xf,
 	.pd = {
 		.name = "titan_top_gdsc",
 	},
@@ -2839,7 +2845,6 @@ static struct clk_regmap *camcc_sc8280xp_clocks[] = {
 	[CAMCC_CSIPHY2_CLK] = &camcc_csiphy2_clk.clkr,
 	[CAMCC_CSIPHY3_CLK] = &camcc_csiphy3_clk.clkr,
 	[CAMCC_FAST_AHB_CLK_SRC] = &camcc_fast_ahb_clk_src.clkr,
-	[CAMCC_GDSC_CLK] = &camcc_gdsc_clk.clkr,
 	[CAMCC_ICP_AHB_CLK] = &camcc_icp_ahb_clk.clkr,
 	[CAMCC_ICP_CLK] = &camcc_icp_clk.clkr,
 	[CAMCC_ICP_CLK_SRC] = &camcc_icp_clk_src.clkr,

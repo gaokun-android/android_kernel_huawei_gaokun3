@@ -124,6 +124,11 @@ struct camss_resources {
 struct camss {
 	struct v4l2_device v4l2_dev;
 	struct v4l2_async_notifier notifier;
+	/* gaokun3 patches/0035: 容忍从未绑上的传感器（见 camss_sensor_fallback_work） */
+	struct delayed_work sensor_fallback_work;
+	bool notifier_complete;
+	struct fwnode_handle *bound_sensors[8];
+	unsigned int num_bound_sensors;
 	struct media_device media_dev;
 	struct device *dev;
 	struct csiphy_device *csiphy;
